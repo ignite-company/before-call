@@ -74,10 +74,10 @@ test("range shape, source, observed duration and stale snapshots are checked", (
   assert.equal(g.percent(), 0);
 });
 test("expired or malformed token does not discard legitimate progress", () => {
-  assert.equal(activeSession(token(now - 86400000), now), null);
+  assert.equal(activeSession(token(now - 14 * 86400000), now), null);
   assert.equal(activeSession("arbitrary", now), null);
   const { store } = fixture();
-  assert.ok(store.write(state({ session: token(now - 90000000) })));
+  assert.ok(store.write(state({ session: token(now - 15 * 86400000) })));
   assert.equal(store.read().session, null);
   assert.deepEqual(store.read().ranges, [[0,5]]);
 });

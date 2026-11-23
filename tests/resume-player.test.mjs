@@ -5,12 +5,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createWatchGate } from "../watch-gate.mjs";
 import { activeSession, createProgressStorage, restorePosition } from "../watch-persistence.mjs";
+import { MAX_PLAYBACK_RATE } from "../playback-policy.mjs";
 import { createHandler } from "../api/reward.mjs";
 
 const source = readFileSync(new URL("../app.mjs", import.meta.url), "utf8").replace(/^import .*\n/gm, "");
 const createApp = new Function("videoUrl", "createWatchGate", "activeSession", "createProgressStorage", "restorePosition",
   "document", "globalThis", "performance", "requestAnimationFrame", "cancelAnimationFrame", "fetch", "matchMedia",
-  "Date", "setTimeout", "clearTimeout", source);
+  "Date", "setTimeout", "clearTimeout", "MAX_PLAYBACK_RATE", source);
 
 class Element {
   listeners = new Map();
@@ -76,7 +77,7 @@ function browser() {
       doc, win, { now: () => time }, fn => { raf.set(++seq, fn); return seq; }, id => raf.delete(id),
       fetch, () => ({ matches: true }), { now: () => wallClock },
       (fn, ms) => { const id = ++testSequence; timeouts.push({ fn, due: wallClock + ms, id }); return id; },
-      id => { timeouts = timeouts.filter(t => t.id !== id); });
+      id => { timeouts = timeouts.filter(t => t.id !== id); }, MAX_PLAYBACK_RATE);
     const playTo = async (to) => {
       while (player.currentTime < to - .0001) {
         player.currentTime = Math.min(to, player.currentTime + .025);
@@ -142,8 +143,8 @@ test("rejected cached session gets a new server timer without asking the visitor
   await fresh.el("claim").fire("click");
   assert.equal(fresh.el("claim").disabled, true);
   assert.equal(fresh.el("code-panel").hidden, true);
-  assert.match(fresh.el("watch-status").textContent, /ready in about 5 seconds/);
-  b.advance(5100);
+  assert.match(fresh.el("watch-status").textContent, /ready in about 3 seconds/);
+  b.advance(3100);
   assert.equal(fresh.el("claim").disabled, false);
   await fresh.el("claim").fire("click");
   assert.equal(fresh.el("reward-code").textContent, "dummy-test-code");
@@ -169,4 +170,33 @@ test("slow and failed metadata cannot wipe progress or trap the resume button", 
   const recovered = b.page();
   await recovered.ready;
   assert.equal(recovered.el("start-text").textContent, "Resume video");
+});
+
+test("missing section button locates the first real gap, then points to the next and unlocks after recovery", async () => {
+  const b = browser(), p = b.page();
+  await p.ready;
+  await p.el("start").fire("click");
+  await p.playTo(1.1);
+  p.player.currentTime = 2.1;
+  await p.player.fire("seeking");
+  await p.player.fire("seeked");
+  await p.playTo(2.9);
+  p.player.currentTime = 4.1;
+  await p.player.fire("seeking");
+  await p.player.fire("seeked");
+  await p.playTo(5);
+  await p.end();
+  assert.equal(p.el("claim").disabled, true);
+  assert.equal(p.el("missing-action").hidden, false);
+  assert.match(p.el("missing-note").textContent, /0:01/);
+  p.player.ended = false;
+  await p.el("missing-button").fire("click");
+  assert.ok(Math.abs(p.player.currentTime - .5) < .03);
+  await p.playTo(2.3);
+  assert.match(p.el("missing-note").textContent, /0:02/);
+  await p.el("missing-button").fire("click");
+  assert.ok(Math.abs(p.player.currentTime - 2.3) < .03);
+  await p.playTo(4.3);
+  assert.equal(p.el("missing-action").hidden, true);
+  assert.equal(p.el("claim").disabled, false);
 });

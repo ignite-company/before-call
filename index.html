@@ -42,6 +42,10 @@
         <button type="button" class="claim" id="claim" aria-describedby="watch-status" disabled>Click here after watching <span aria-hidden="true">↗</span></button>
         <div class="progress" id="watch-progress" role="progressbar" aria-label="Video watched" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="progress-fill"></div></div>
         <p class="watch-status" id="watch-status" aria-live="polite">The video is needed to unlock your code.</p>
+        <div class="missing-action" id="missing-action" hidden>
+          <p id="missing-note"></p>
+          <button type="button" class="missing-button" id="missing-button" aria-describedby="missing-note">Play missing section</button>
+        </div>
       </div>
       <div class="code" id="code-panel" hidden tabindex="-1">
         <div><p>YOUR SECRET CODE</p><strong id="reward-code"></strong></div>

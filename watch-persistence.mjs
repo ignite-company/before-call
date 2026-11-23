@@ -1,7 +1,8 @@
+import { WATCH_SESSION_TTL_MS } from "./playback-policy.mjs";
+
 // Local UX progress only. The server validates every reward session and claim.
 const PREFIX = "ignite-before-call.watch.v1:";
 const PROGRESS_TTL = 14 * 24 * 60 * 60 * 1000;
-const SESSION_TTL = 24 * 60 * 60 * 1000;
 const MAX_RANGES = 512;
 const MAX_DURATION = 24 * 60 * 60;
 const MAX_JSON_LENGTH = 50000;
@@ -9,7 +10,7 @@ const MAX_JSON_LENGTH = 50000;
 export function activeSession(token, now = Date.now()) {
   if (typeof token !== "string") return null;
   const match = /^(\d{13})\.\d{4,8}\.[0-9a-f]{24}\.[A-Za-z0-9_-]{43}$/.exec(token);
-  if (!match || Number(match[1]) > now + 120000 || now - Number(match[1]) >= SESSION_TTL) return null;
+  if (!match || Number(match[1]) > now + 120000 || now - Number(match[1]) >= WATCH_SESSION_TTL_MS) return null;
   return token;
 }
 
@@ -19,18 +20,24 @@ export function sanitizeProgress(value, now = Date.now()) {
       !Number.isFinite(value.duration) || value.duration <= 0 || value.duration >= MAX_DURATION ||
       !Number.isFinite(value.position) || value.position < 0 || value.position > value.duration ||
       !Array.isArray(value.ranges) || value.ranges.length === 0 || value.ranges.length > MAX_RANGES) return null;
-  let previousEnd = -1;
-  const ranges = [];
-  for (const range of value.ranges) {
+  function readRanges(list) {
+    if (!Array.isArray(list) || list.length > MAX_RANGES) return null;
+    let previousEnd = -1;
+    const ranges = [];
+    for (const range of list) {
     if (!Array.isArray(range) || range.length !== 2) return null;
     const [start, end] = range;
     if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 ||
         end <= start || end > value.duration || start <= previousEnd) return null;
-    ranges.push([start, end]);
-    previousEnd = end;
+      ranges.push([start, end]);
+      previousEnd = end;
+    }
+    return ranges;
   }
+  const ranges = readRanges(value.ranges), skips = readRanges(value.skips ?? []);
+  if (!ranges || !skips) return null;
   return {
-    savedAt: value.savedAt, duration: value.duration, position: value.position, ranges,
+    savedAt: value.savedAt, duration: value.duration, position: value.position, ranges, skips,
     session: activeSession(value.session, now), celebrated: value.celebrated === true
   };
 }

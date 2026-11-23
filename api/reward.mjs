@@ -1,6 +1,8 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
-const MAX_SESSION_MS = 24 * 60 * 60 * 1000;
+import { MAX_PLAYBACK_RATE, WATCH_SESSION_TTL_MS } from "../playback-policy.mjs";
+
+const MAX_VIDEO_MS = 24 * 60 * 60 * 1000;
 function sign(body, key) {
   return createHmac("sha256", key).update(body).digest("base64url");
 }
@@ -16,7 +18,7 @@ export function createHandler({ env = process.env, now = Date.now } = {}) {
     const code = env.WATCH_REWARD_CODE?.trim();
     const key = env.WATCH_SESSION_SECRET?.trim();
     const durationMs = Math.ceil(Number(env.WATCH_DURATION_SECONDS) * 1000);
-    if (!code || !key || key.length < 32 || !Number.isFinite(durationMs) || durationMs < 1000 || durationMs >= MAX_SESSION_MS) {
+    if (!code || !key || key.length < 32 || !Number.isFinite(durationMs) || durationMs < 1000 || durationMs >= MAX_VIDEO_MS) {
       return res.status(503).json({ error: "Reward unavailable" });
     }
     let input = req.body;
@@ -39,11 +41,12 @@ export function createHandler({ env = process.env, now = Date.now } = {}) {
       return res.status(400).json({ error: "Invalid watch session" });
     }
     const elapsed = at - Number(timestamp);
-    if (elapsed < 0 || elapsed > MAX_SESSION_MS || Number(oldDuration) !== durationMs) {
+    if (elapsed < 0 || elapsed >= WATCH_SESSION_TTL_MS || Number(oldDuration) !== durationMs) {
       return res.status(400).json({ error: "Expired watch session" });
     }
-    if (elapsed < durationMs) {
-      return res.status(425).json({ retryAfter: Math.ceil((durationMs - elapsed) / 1000) });
+    const minimumElapsed = Math.ceil(durationMs / MAX_PLAYBACK_RATE);
+    if (elapsed < minimumElapsed) {
+      return res.status(425).json({ retryAfter: Math.ceil((minimumElapsed - elapsed) / 1000) });
     }
     return res.status(200).json({ code });
   };

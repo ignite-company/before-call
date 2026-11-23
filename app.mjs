@@ -1,5 +1,6 @@
 import { videoUrl } from "./config.mjs";
 import { createWatchGate } from "./watch-gate.mjs";
+import { MAX_PLAYBACK_RATE } from "./playback-policy.mjs";
 import { activeSession, createProgressStorage, restorePosition } from "./watch-persistence.mjs";
 
 const el = (id) => document.getElementById(id);
@@ -9,11 +10,13 @@ const status = el("watch-status"), panel = el("code-panel"), rewardCode = el("re
 const gate = createWatchGate();
 const storage = createProgressStorage(videoUrl);
 const saved = videoUrl.trim() ? storage.read() : null;
-const resume = el("resume-note");
+const resume = el("resume-note"), missingAction = el("missing-action");
+const missingNote = el("missing-note"), missingButton = el("missing-button");
+let recoveryOffered = false, plannedSeek = null;
 let started = false, playing = false, claiming = false, revealed = false, broken = false;
 let lastPct = 0, lastForeground = 0, animationId, watchSession, rewardRetryTimer;
 let rewardRetryAt = 0, lastSavedAt = 0, restoredPosition = null, hasCelebrated = false;
-let sessionToken = null;
+let sessionToken = null, lastSessionAttempt = -Infinity;
 
 function persist(force = false) {
   if ((!started && restoredPosition === null) || broken) return;
@@ -30,27 +33,48 @@ function persist(force = false) {
   });
 }
 
+function formatPosition(value) {
+  const seconds = Math.floor(Math.max(0, value));
+  return Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
+}
+
+function seekTo(position) {
+  stopFrames();
+  plannedSeek = position;
+  video.currentTime = position;
+}
+
 function maybeRestore() {
   if (started || !saved || restoredPosition !== null || !gate.restore(saved)) return;
-  restoredPosition = restorePosition(saved);
+  const gap = gate.firstMissing();
+  restoredPosition = saved.position >= saved.duration - 1 && gap
+    ? Math.max(0, gap.start - .60) : restorePosition(saved);
   lastForeground = saved.position;
   hasCelebrated = saved.celebrated;
   sessionToken = saved.session;
   el("start-text").textContent = gate.ready() ? "Play again" : "Resume video";
-  const minutes = Math.floor(restoredPosition / 60);
-  const secs = String(Math.floor(restoredPosition % 60)).padStart(2, "0");
-  resume.textContent = gate.ready() ? "Video complete on this browser." : "Progress saved · Resume at " + minutes + ":" + secs;
+  resume.textContent = gate.ready() ? "Video complete on this browser." : "Progress saved · Resume at " + formatPosition(restoredPosition);
+  recoveryOffered = !gate.ready() && saved.position >= saved.duration - 1;
   resume.hidden = false;
   status.textContent = gate.ready() ? "Video complete. Your code is ready." :
     "Progress saved. Finish watching to unlock the code.";
-  if (!sessionToken) watchSession = beginRewardSession();
+  if (!sessionToken) startRewardSession();
   render();
 }
 
 function render() {
   const pct = gate.percent();
   claim.disabled = !gate.ready() || claiming || revealed || broken || Date.now() < rewardRetryAt;
+  const gap = recoveryOffered && !broken && !revealed && !gate.ready() && gate.firstMissing();
+  missingAction.hidden = !gap;
+  if (gap) {
+    const message = "First section to finish starts at " + formatPosition(gap.start) + ".";
+    if (missingNote.textContent !== message) missingNote.textContent = message;
+  }
   if (pct !== lastPct) {
+    if (pct === 100 && recoveryOffered && !claiming && !revealed && !broken) {
+      status.textContent = "Video complete. Your code is ready.";
+    }
     lastPct = pct;
     fill.style.width = pct + "%";
     progress.setAttribute("aria-valuenow", pct);
@@ -58,7 +82,7 @@ function render() {
 }
 function sample(eligible) {
   if (!eligible) return gate.breakInterval();
-  gate.sample({ media: video.currentTime, clock: performance.now(), eligible, rate: video.playbackRate });
+  gate.sample({ media: video.currentTime, clock: performance.now(), eligible, rate: video.playbackRate, played: video.played });
   lastForeground = video.currentTime;
 }
 function frame() {
@@ -66,6 +90,7 @@ function frame() {
   sample(!video.seeking && !video.paused && !video.ended);
   render();
   persist();
+  if (!sessionToken && Date.now() - lastSessionAttempt > 12000) startRewardSession();
   animationId = requestAnimationFrame(frame);
 }
 function stopFrames() {
@@ -144,30 +169,51 @@ if (videoUrl.trim()) {
     persist(true);
   });
   video.addEventListener("seeking", () => {
-    gate.breakInterval();
+    const intended = plannedSeek !== null && Math.abs(video.currentTime - plannedSeek) <= .20;
+    if (started && !intended) gate.markSkip(lastForeground, video.currentTime);
+    else gate.breakInterval();
     // Seeking may resume without firing a separate playing event on some players.
   });
   video.addEventListener("seeked", () => {
+    plannedSeek = null;
     gate.breakInterval();
+    if (started && !video.paused && !document.hidden && !playing) {
+      playing = true;
+      animationId = requestAnimationFrame(frame);
+    }
     if (started && playing && !video.paused && !document.hidden) sample(true);
+    const gap = gate.firstMissing();
+    if (gap && gap.end < video.currentTime - .15) recoveryOffered = true;
+    render();
   });
-  video.addEventListener("ratechange", () => gate.breakInterval());
+  video.addEventListener("ratechange", () => {
+    if (video.playbackRate > MAX_PLAYBACK_RATE) {
+      video.playbackRate = MAX_PLAYBACK_RATE;
+      return;
+    }
+    if (playing && !document.hidden && !video.seeking) sample(true);
+    else gate.breakInterval();
+  });
   video.addEventListener("ended", () => {
     if (playing && !document.hidden && !video.seeking) sample(true);
     stopFrames();
+    recoveryOffered = !gate.ready() && !revealed;
     render();
     persist(true);
     if (!revealed) status.textContent = gate.ready()
       ? "Video complete. Your code is ready."
-      : "Replay any parts you skipped to unlock the code.";
+      : "Some playback hasn’t been confirmed yet.";
   });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden && started) {
       stopFrames();
       persist(true);
       if (!video.paused) {
-        video.pause();
-        if (!video.seeking && !video.ended) video.currentTime = lastForeground;
+        if (!video.seeking && !video.ended) {
+          gate.markSkip(lastForeground, video.currentTime);
+          video.pause();
+          seekTo(lastForeground);
+        } else video.pause();
         status.textContent = "Playback paused while this tab was hidden. Press play to continue.";
       }
     }
@@ -183,22 +229,20 @@ if (videoUrl.trim()) {
       resume.textContent = "Still loading your video. Try again in a moment.";
       return;
     }
-    started = true;
-    gate.start();
-    video.pause();
-    video.muted = false;
-    // A completed watcher can reveal again immediately or choose to replay.
-    video.currentTime = gate.ready() ? 0 : (restoredPosition ?? 0);
-    if (!sessionToken && !watchSession) watchSession = beginRewardSession();
-    video.controls = true;
-    intro.hidden = true;
-    video.play().catch(() => {
-      if (!broken) status.textContent = "Press play on the video to start.";
-    });
-    video.focus();
+    beginPlayback(gate.ready() ? 0 : (restoredPosition ?? 0));
+  });
+  missingButton.addEventListener("click", () => {
+    const gap = gate.firstMissing();
+    if (!gap || !recoveryOffered || broken || revealed) return;
+    status.textContent = "Playing the section around " + formatPosition(gap.start) + ".";
+    beginPlayback(Math.max(0, gap.start - .60), true);
   });
   video.src = videoUrl;
-  if (!saved) video.play().catch(() => { if (!started && !broken) el("start-text").textContent = "Press to play"; });
+  if (!saved) {
+    // Start the signed clock while the media loads, not after someone finishes.
+    startRewardSession();
+    video.play().catch(() => { if (!started && !broken) el("start-text").textContent = "Press to play"; });
+  }
   // Metadata errors must not erase progress. A slow metadata load should not
   // prevent the visitor from using a gesture to start the media download.
   if (saved) setTimeout(() => {
@@ -211,12 +255,40 @@ if (videoUrl.trim()) {
   }, 5000);
 }
 
+function beginPlayback(position, moveToVideo = false) {
+  if (!started) {
+    started = true;
+    gate.start();
+    video.pause();
+    video.muted = false;
+    if (!sessionToken) startRewardSession();
+    video.controls = true;
+    intro.hidden = true;
+  }
+  if (Math.abs(video.currentTime - position) > .001) seekTo(position);
+  video.play().catch(() => {
+    if (!broken) status.textContent = "Press play on the video to continue.";
+  });
+  if (moveToVideo) {
+    const behavior = matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+    video.scrollIntoView?.({ block: "center", behavior });
+  }
+  video.focus({ preventScroll: moveToVideo });
+}
+
 function rewardRequest(data) {
   return fetch("./api/reward", {
     method: "POST", cache: "no-store",
     headers: { "Content-Type": "application/json" }, body: JSON.stringify(data),
     signal: typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined
   });
+}
+
+function startRewardSession() {
+  if (watchSession) return watchSession;
+  lastSessionAttempt = Date.now();
+  watchSession = beginRewardSession().finally(() => { watchSession = null; });
+  return watchSession;
 }
 
 async function beginRewardSession() {
@@ -238,8 +310,7 @@ claim.addEventListener("click", async () => {
   try {
     let session = activeSession(sessionToken) || await watchSession;
     if (!session) {
-      watchSession = beginRewardSession();
-      session = await watchSession;
+      session = await startRewardSession();
     }
     if (!session) throw new Error("Unavailable");
     let result = await rewardRequest({ action: "claim", session });
@@ -247,8 +318,7 @@ claim.addEventListener("click", async () => {
       // Secret rotation or server expiry can invalidate a cached session.
       // Keep watched ranges, but obtain a new authenticated timer.
       sessionToken = null;
-      watchSession = beginRewardSession();
-      session = await watchSession;
+      session = await startRewardSession();
       if (!session) throw new Error("Unavailable");
       result = await rewardRequest({ action: "claim", session });
     }
