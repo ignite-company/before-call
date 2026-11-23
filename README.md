@@ -23,3 +23,7 @@ python3 -m http.server 8000
 ```
 
 The Python server previews the static page; reward redemption also requires the Vercel function (or a local mock). For local Vercel development, use only a dummy code. Don't deploy this page to customers with the video unconfigured.
+
+## Current video
+
+The supplied video is 384.600 seconds long (6:24.6). Set `WATCH_DURATION_SECONDS` to `384.600` while this exact source is in use. The source is 3240 × 2160 HEVC with AAC, approximately 1.58 GB, and serves HTTP byte ranges. Its metadata is at the end of the file. Before sending this page to prospects, test on phones; for wider compatibility, use a fast-start H.264/AAC export of the same recording and set the duration from that export.
