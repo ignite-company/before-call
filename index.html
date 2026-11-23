@@ -36,7 +36,7 @@
       <div class="reward-copy">
         <p class="eyebrow">02 / WATCH-TO-UNLOCK</p>
         <h2 id="reward-title">Finish the video.<br>Get $200 off.</h2>
-        <p>I’ll take $200 off your Ignite Co. service. Watch the full video, then reveal a code to mention on our call.</p>
+        <p>I’ll take $200 off your Ignite Co. service. Watch the full video, then unlock your code and text it to me.</p>
       </div>
       <div class="reward-action">
         <button type="button" class="claim" id="claim" aria-describedby="watch-status" disabled>Click here after watching <span aria-hidden="true">↗</span></button>
@@ -50,7 +50,11 @@
       <div class="code" id="code-panel" hidden tabindex="-1">
         <div><p>YOUR SECRET CODE</p><strong id="reward-code"></strong></div>
         <button type="button" id="copy">Copy code</button>
-        <p class="code-note">Mention this code on the call to get $200 off your service.</p>
+        <div class="code-instructions">
+          <p>Text this code to me to get $200 off your Ignite Co. service.</p>
+          <a class="text-code" id="text-code">Text +1 201-973-9748</a>
+          <p class="code-fallback">If the message opens blank, tap Copy code and paste it into your text.</p>
+        </div>
         <span class="sr-only" id="copy-status" role="status"></span>
       </div>
     </section>

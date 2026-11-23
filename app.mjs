@@ -339,6 +339,10 @@ claim.addEventListener("click", async () => {
     if (typeof code !== "string" || !code.trim() || !gate.claim()) throw new Error("Unavailable");
     revealed = true;
     rewardCode.textContent = code;
+    const { userAgent = "", platform = "", maxTouchPoints = 0 } = globalThis.navigator ?? {};
+    const appleMobile = /iPhone|iPad|iPod/i.test(userAgent) || (/^Mac/i.test(platform) && maxTouchPoints > 1);
+    const separator = appleMobile ? "&" : "?";
+    el("text-code").setAttribute("href", "sms:+12019739748" + separator + "body=" + encodeURIComponent(code));
     panel.hidden = false;
     status.textContent = "Your code is unlocked.";
     panel.focus();

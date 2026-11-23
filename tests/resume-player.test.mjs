@@ -26,7 +26,7 @@ class Element {
     this.listeners.get(key).push(fn);
   }
   async fire(key) { for (const fn of this.listeners.get(key) ?? []) await fn(); }
-  setAttribute(key, value) { this.attributes[key] = Number(value); }
+  setAttribute(key, value) { this.attributes[key] = key === "aria-valuenow" ? Number(value) : String(value); }
   focus() {}
 }
 function browser() {
@@ -54,7 +54,7 @@ function browser() {
     });
     return { status: code, ok: code >= 200 && code < 300, json: async () => json };
   }
-  function page({ loadMetadata = true } = {}) {
+  function page({ loadMetadata = true, navigator } = {}) {
     timeouts = [];
     const elements = new Map(), raf = new Map();
     const el = (id) => {
@@ -63,6 +63,7 @@ function browser() {
     };
     el("code-panel").hidden = true;
     const doc = new Element(), win = new Element(), player = el("video");
+    win.navigator = navigator;
     let time = 0, seq = 0;
     doc.getElementById = el;
     Object.assign(player, {
@@ -199,4 +200,27 @@ test("missing section button locates the first real gap, then points to the next
   await p.playTo(4.3);
   assert.equal(p.el("missing-action").hidden, true);
   assert.equal(p.el("claim").disabled, false);
+});
+
+
+test("prefilled SMS is absent until claim, then uses the encoded earned code on Apple and Android", async () => {
+  for (const [navigator, delimiter] of [
+    [{ userAgent: "iPhone" }, "&"],
+    [{ platform: "MacIntel", maxTouchPoints: 5 }, "&"],
+    [{ userAgent: "Android" }, "?"],
+  ]) {
+    const b = browser();
+    b.env.WATCH_REWARD_CODE = "CODE 25 + #";
+    const p = b.page({ navigator });
+    await p.ready;
+    assert.equal(p.el("text-code").attributes.href, undefined);
+    await p.el("claim").fire("click");
+    assert.equal(p.el("text-code").attributes.href, undefined);
+    await p.el("start").fire("click");
+    await p.playTo(5);
+    await p.end();
+    await p.el("claim").fire("click");
+    assert.equal(p.el("code-panel").hidden, false);
+    assert.equal(p.el("text-code").attributes.href, "sms:+12019739748" + delimiter + "body=CODE%2025%20%2B%20%23");
+  }
 });
