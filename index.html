@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#0a0a0b">
+  <title>Before Your Call | Ignite Co.</title>
+  <meta name="description" content="A quick walkthrough from Asher before your Ignite Co. call.">
+  <link rel="icon" href="ignite-wordmark.png" type="image/png">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.mjs"></script>
+</head>
+<body>
+  <header class="top"><div class="wrap nav">
+    <div class="brand"><img src="ignite-wordmark.png" width="28" height="28" alt=""> IGNITE<span>CO.</span></div>
+    <div class="booked"><i aria-hidden="true"></i> CALL BOOKED</div>
+  </div></header>
+  <main class="wrap">
+    <section class="intro" aria-labelledby="title">
+      <p class="eyebrow">01 / BEFORE YOUR CALL</p>
+      <h1 id="title">You’re booked.<br><em>Watch this first.</em></h1>
+      <p class="intro-copy">I’ll walk you through how we help contractors get more of the jobs they actually want, what it costs, and what I’ll ask on our call.</p>
+      <p class="signature">Asher <span>· Founder, Ignite Co.</span></p>
+    </section>
+    <section aria-label="Video from Asher">
+      <div class="video-shell">
+        <video id="video" playsinline preload="metadata" aria-label="Before your call with Ignite Co." hidden></video>
+        <div class="video-interstitial" id="video-interstitial">
+          <div class="video-label"><span aria-hidden="true"></span> A MESSAGE FROM ASHER</div>
+          <button class="start" id="start" type="button" hidden>▶ <span id="start-text">Press to play</span></button>
+          <p id="unavailable">The walkthrough isn’t available right now.</p>
+        </div>
+      </div>
+      <p class="video-caption"><span>PRE-CALL WALKTHROUGH</span><span>IGNITE CO. / 01</span></p>
+    </section>
+    <section class="reward" aria-labelledby="reward-title">
+      <div class="reward-copy">
+        <p class="eyebrow">02 / WATCH-TO-UNLOCK</p>
+        <h2 id="reward-title">Finish the video.<br>Get $200 off.</h2>
+        <p>I’ll take $200 off your Ignite Co. service. Watch the full video, then reveal a code to mention on our call.</p>
+      </div>
+      <div class="reward-action">
+        <button type="button" class="claim" id="claim" aria-describedby="watch-status" disabled>Click here after watching <span aria-hidden="true">↗</span></button>
+        <div class="progress" id="watch-progress" role="progressbar" aria-label="Video watched" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="progress-fill"></div></div>
+        <p class="watch-status" id="watch-status" aria-live="polite">The video is needed to unlock your code.</p>
+      </div>
+      <div class="code" id="code-panel" hidden tabindex="-1">
+        <div><p>YOUR SECRET CODE</p><strong id="reward-code"></strong></div>
+        <button type="button" id="copy">Copy code</button>
+        <p class="code-note">Mention this code on the call to get $200 off your service.</p>
+        <span class="sr-only" id="copy-status" role="status"></span>
+      </div>
+    </section>
+    <section class="prep" aria-labelledby="prep-title">
+      <p class="eyebrow">03 / COME READY</p>
+      <h2 id="prep-title">Three things to bring.</h2>
+      <ol>
+        <li><span>01</span>The kind of job you want more of.</li>
+        <li><span>02</span>What that job is typically worth.</li>
+        <li><span>03</span>How many more you can actually handle.</li>
+      </ol>
+      <p>If a partner needs to sign off, bring them on the call too.</p>
+    </section>
+  </main>
+  <footer class="wrap footer"><span>IGNITE CO.</span><span>SEE YOU ON THE CALL.</span></footer>
+  <canvas id="confetti" aria-hidden="true" hidden></canvas>
+</body>
+</html>
