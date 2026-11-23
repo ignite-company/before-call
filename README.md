@@ -27,3 +27,5 @@ The Python server previews the static page; reward redemption also requires the 
 ## Current video
 
 The supplied video is 384.600 seconds long (6:24.6). Set `WATCH_DURATION_SECONDS` to `384.600` while this exact source is in use. The source is 3240 × 2160 HEVC with AAC, approximately 1.58 GB, and serves HTTP byte ranges. Its metadata is at the end of the file. Before sending this page to prospects, test on phones; for wider compatibility, use a fast-start H.264/AAC export of the same recording and set the duration from that export.
+
+Playback progress, a short-lived signed watch session, and whether confetti has been shown are saved locally in the viewer’s browser for this video. Progress expires after 14 days; the token expires after 24 hours. Refreshing does not store or expose the discount code, and a missing or expired session must satisfy a replacement server timer before the code can be re-revealed. Clearing site data, switching devices, or blocking local storage prevents recovery.

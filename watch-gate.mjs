@@ -1,3 +1,5 @@
+import { sanitizeProgress } from "./watch-persistence.mjs";
+
 const EDGE = 0.10;
 const MAX_SAMPLE_SECONDS = 0.8;
 
@@ -40,6 +42,19 @@ export function createWatchGate() {
     setDuration(value) { if (Number.isFinite(value) && value > 0) duration = value; },
     start() { started = true; previous = undefined; },
     breakInterval() { previous = undefined; },
+    snapshot() {
+      return { duration, ranges: ranges.map(range => [...range]) };
+    },
+    restore(snapshot, now = Date.now()) {
+      const saved = sanitizeProgress(snapshot, now);
+      if (started || !saved || !Number.isFinite(duration) || Math.abs(saved.duration - duration) > .10) return false;
+      const clipped = saved.ranges.map(([a, b]) => [a, Math.min(b, duration)]).filter(([a, b]) => b > a);
+      if (!clipped.length) return false;
+      started = true;
+      previous = undefined;
+      ranges = clipped;
+      return true;
+    },
     sample,
     percent() {
       if (!Number.isFinite(duration)) return 0;
