@@ -100,8 +100,8 @@ h2{font-size:clamp(2rem,5vw,3.65rem)}
 .reward-dialog p{margin:0 auto 12px;line-height:1.45;color:#fff1ee}
 .reward-dialog-code{display:grid;gap:5px;margin:14px 0;padding:12px;background:#231519;border:1px dashed #cb7378;border-radius:12px}
 .reward-dialog-code strong{font-size:clamp(1rem,4.5vw,1.45rem);letter-spacing:.08em;user-select:all}
-.reward-dialog .text-code,.reward-copy{display:inline-flex;align-items:center;justify-content:center;min-height:44px;margin:3px;vertical-align:middle}
-.reward-copy{padding:6px 12px;border:1px solid #bc7378;border-radius:9px;color:#fff;background:#372026;cursor:pointer}
+.reward-dialog .text-code,.reward-dialog-copy{display:inline-flex;align-items:center;justify-content:center;min-height:44px;margin:3px;vertical-align:middle}
+.reward-dialog-copy{padding:6px 12px;border:1px solid #bc7378;border-radius:9px;color:#fff;background:#372026;cursor:pointer}
 .reward-dialog .reward-copy-status{margin:6px auto 0;font-size:.86rem}
 .reward-dialog .reward-copy-status:empty{display:none}
 @media(max-width:360px){.reward-dialog{padding:10px}.reward-dialog-content{padding-inline:14px}}

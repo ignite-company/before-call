@@ -8,8 +8,8 @@
   <title>Before Your Call | Ignite Co.</title>
   <meta name="description" content="A quick walkthrough from Asher before your Ignite Co. call.">
   <link rel="icon" href="ignite-wordmark.png" type="image/png">
-  <link rel="stylesheet" href="styles.css?v=reward-popup">
-  <script type="module" src="app.mjs?v=reward-popup"></script>
+  <link rel="stylesheet" href="styles.css?v=reward-popup-spacing">
+  <script type="module" src="app.mjs?v=reward-popup-spacing"></script>
 </head>
 <body>
   <main class="wrap">
@@ -132,15 +132,15 @@
     </section>
   </main>
   <footer class="wrap footer"><span>IGNITE CO.</span><span>SEE YOU ON THE CALL.</span></footer>
-  <dialog class="reward-dialog" id="reward-dialog" aria-labelledby="reward-title" aria-describedby="reward-celebration-note">
+  <dialog class="reward-dialog" id="reward-dialog" aria-labelledby="reward-dialog-title" aria-describedby="reward-celebration-note">
     <div class="reward-dialog-content">
       <button class="reward-close" id="close-reward" type="button">Close</button>
       <div class="reward-celebration">VIDEO COMPLETE</div>
-      <h2 id="reward-title" tabindex="-1">Congratulations!<br><span>You unlocked $200 off.</span></h2>
+      <h2 id="reward-dialog-title" tabindex="-1">Congratulations!<br><span>You unlocked $200 off.</span></h2>
       <p id="reward-celebration-note">Thanks for watching all the way through. Text me your code to take $200 off your Ignite Co. service.</p>
       <div class="reward-dialog-code"><span>YOUR SECRET CODE</span><strong id="dialog-code"></strong></div>
       <a class="text-code" id="dialog-text-code">Text my code</a>
-      <button class="reward-copy" id="dialog-copy" type="button">Copy code</button>
+      <button class="reward-dialog-copy" id="dialog-copy" type="button">Copy code</button>
       <p class="reward-copy-status" id="dialog-copy-status" aria-live="polite"></p>
     </div>
   </dialog>

@@ -399,7 +399,7 @@ function openRewardDialog() {
     popupFocusReturn = document.activeElement;
     rewardDialog.showModal();
     rewardDialog.append(el("confetti"));
-    el("reward-title").focus({ preventScroll: true });
+    el("reward-dialog-title").focus({ preventScroll: true });
     return true;
   } catch { return false; }
 }
