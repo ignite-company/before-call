@@ -8,7 +8,26 @@ const video = el("video"), intro = el("video-interstitial"), start = el("start")
 const claim = el("claim"), fill = el("progress-fill"), progress = el("watch-progress");
 const status = el("watch-status"), panel = el("code-panel"), rewardCode = el("reward-code");
 const gate = createWatchGate();
-const storage = createProgressStorage(videoUrl);
+const suppliedPrep = new URLSearchParams((globalThis.location?.hash ?? "").slice(1)).get("prep");
+const prep = typeof suppliedPrep === "string" && /^[a-f0-9-]{36}\.\d{10}\.[A-Za-z0-9_-]{43}$/.test(suppliedPrep) ? suppliedPrep : null;
+const storage = createProgressStorage(prep ? videoUrl + "#" + prep.split(".")[0] : videoUrl);
+let startEventInFlight = false, startEventSent = false;
+function prepEvent(kind, proof) {
+  if (!prep) return;
+  if (kind === "started" && (startEventInFlight || startEventSent)) return;
+  if (kind === "started") startEventInFlight = true;
+  // A delayed/unreachable alert store must not hold up playback or claim.
+  void fetch("./api/prep-event", {
+    method:"POST", cache:"no-store", keepalive:true,
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(proof ? {prep,kind,proof} : {prep,kind})
+  }).then(response => {
+    if (kind === "started" && response.ok) startEventSent = true;
+  }).catch(() => {}).finally(() => {
+    if (kind === "started") startEventInFlight = false;
+  });
+}
+
 const saved = videoUrl.trim() ? storage.read() : null;
 const resume = el("resume-note"), missingAction = el("missing-action");
 const missingNote = el("missing-note"), missingButton = el("missing-button");
@@ -146,6 +165,7 @@ if (videoUrl.trim()) {
     if (playing) return;
     if (document.hidden) { video.pause(); return; }
     playing = true;
+    prepEvent("started");
     cancelAnimationFrame(animationId);
     // Capture the exact point where playback begins or resumes.
     sample(!video.seeking);
@@ -279,7 +299,7 @@ function beginPlayback(position, moveToVideo = false) {
 function rewardRequest(data) {
   return fetch("./api/reward", {
     method: "POST", cache: "no-store",
-    headers: { "Content-Type": "application/json" }, body: JSON.stringify(data),
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify(prep ? { ...data, prep } : data),
     signal: typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined
   });
 }
@@ -335,7 +355,7 @@ claim.addEventListener("click", async () => {
       return;
     }
     if (!result.ok) throw new Error("Unavailable");
-    const { code } = await result.json();
+    const { code, proof } = await result.json();
     if (typeof code !== "string" || !code.trim() || !gate.claim()) throw new Error("Unavailable");
     revealed = true;
     rewardCode.textContent = code;
@@ -344,6 +364,7 @@ claim.addEventListener("click", async () => {
     const separator = appleMobile ? "&" : "?";
     el("text-code").setAttribute("href", "sms:+12019739748" + separator + "body=" + encodeURIComponent(code));
     panel.hidden = false;
+    if (typeof proof === "string") prepEvent("unlocked", proof);
     status.textContent = "Your code is unlocked.";
     panel.focus();
     if (!hasCelebrated) celebrate();

@@ -7,6 +7,7 @@ import { createWatchGate } from "../watch-gate.mjs";
 import { activeSession, createProgressStorage, restorePosition } from "../watch-persistence.mjs";
 import { MAX_PLAYBACK_RATE } from "../playback-policy.mjs";
 import { createHandler } from "../api/reward.mjs";
+import { createPrepToken } from "../lib/prep.mjs";
 
 const source = readFileSync(new URL("../app.mjs", import.meta.url), "utf8").replace(/^import .*\n/gm, "");
 const createApp = new Function("videoUrl", "createWatchGate", "activeSession", "createProgressStorage", "restorePosition",
@@ -38,6 +39,7 @@ function browser() {
     setItem: (k, v) => values.set(k, v)
   };
   const env = {
+    PREP_SIGNING_SECRET: "dummy-prep-signing-secret-test-only",
     WATCH_REWARD_CODE: "dummy-test-code",
     WATCH_SESSION_SECRET: "signed-dummy-secret-used-by-test-only",
     WATCH_DURATION_SECONDS: "5"
@@ -46,6 +48,7 @@ function browser() {
   async function fetch(_path, req) {
     const body = JSON.parse(req.body);
     requests.push(body);
+    if (_path === "./api/prep-event") return { status: 503, ok: false };
     let code, json;
     handler({ method: req.method, body }, {
       setHeader() {},
@@ -54,7 +57,7 @@ function browser() {
     });
     return { status: code, ok: code >= 200 && code < 300, json: async () => json };
   }
-  function page({ loadMetadata = true, navigator } = {}) {
+  function page({ loadMetadata = true, navigator, personalized=false } = {}) {
     timeouts = [];
     const elements = new Map(), raf = new Map();
     const el = (id) => {
@@ -64,6 +67,7 @@ function browser() {
     el("code-panel").hidden = true;
     const doc = new Element(), win = new Element(), player = el("video");
     win.navigator = navigator;
+    if(personalized) win.location={hash:"#prep="+createPrepToken("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",Math.floor(wallClock/1000)+3600,env.PREP_SIGNING_SECRET)};
     let time = 0, seq = 0;
     doc.getElementById = el;
     Object.assign(player, {
@@ -223,4 +227,21 @@ test("prefilled SMS is absent until claim, then uses the encoded earned code on 
     assert.equal(p.el("code-panel").hidden, false);
     assert.equal(p.el("text-code").attributes.href, "sms:+12019739748" + delimiter + "body=CODE%2025%20%2B%20%23");
   }
+});
+
+
+test("prep link ignores autoplay preview; start and reveal signals don't block playback or reward during alert outage",async()=>{
+  const b=browser(),p=b.page({personalized:true});
+  await p.ready;
+  assert.equal(b.requests.some(x=>x.kind==="started"),false);
+  await p.el("start").fire("click");
+  assert.equal(b.requests.filter(x=>x.kind==="started").length,1);
+  await p.playTo(5);
+  await p.end();
+  assert.equal(b.requests.some(x=>x.kind==="unlocked"),false);
+  await p.el("claim").fire("click");
+  assert.match(p.el("reward-code").textContent,/^IG-[0-9A-F]{16}$/);
+  assert.equal(p.el("code-panel").hidden,false);
+  assert.equal(b.requests.filter(x=>x.kind==="unlocked").length,1);
+  assert.equal(b.requests.find(x=>x.kind==="unlocked").proof.length,43);
 });
