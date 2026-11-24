@@ -36,6 +36,8 @@ let started = false, playing = false, claiming = false, revealed = false, broken
 let lastPct = 0, lastForeground = 0, animationId, watchSession, rewardRetryTimer;
 let rewardRetryAt = 0, lastSavedAt = 0, restoredPosition = null, hasCelebrated = false;
 let sessionToken = null, lastSessionAttempt = -Infinity;
+const rewardDialog = el("reward-dialog");
+let popupFocusReturn = null;
 
 function persist(force = false) {
   if ((!started && restoredPosition === null) || broken) return;
@@ -223,6 +225,9 @@ if (videoUrl.trim()) {
     if (!revealed) status.textContent = gate.ready()
       ? "Video complete. Your code is ready."
       : "Some playback hasn’t been confirmed yet.";
+    if (started && !document.hidden && gate.ready() && !hasCelebrated) {
+      return claimReward({ automatic: true, allowRetry: true });
+    }
   });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden && started) {
@@ -322,7 +327,9 @@ async function beginRewardSession() {
   } catch { return null; }
 }
 
-claim.addEventListener("click", async () => {
+claim.addEventListener("click", () => claimReward());
+
+async function claimReward({ automatic = false, allowRetry = false } = {}) {
   if (!gate.ready() || claiming || revealed || broken || Date.now() < rewardRetryAt) return;
   claiming = true;
   render();
@@ -351,6 +358,9 @@ claim.addEventListener("click", async () => {
       rewardRetryTimer = setTimeout(() => {
         status.textContent = "Video complete. Your code is ready.";
         render();
+        if (automatic && allowRetry && !document.hidden && !hasCelebrated) {
+          void claimReward({ automatic: true });
+        }
       }, retryAfter * 1000 + 25);
       return;
     }
@@ -362,37 +372,67 @@ claim.addEventListener("click", async () => {
     const { userAgent = "", platform = "", maxTouchPoints = 0 } = globalThis.navigator ?? {};
     const appleMobile = /iPhone|iPad|iPod/i.test(userAgent) || (/^Mac/i.test(platform) && maxTouchPoints > 1);
     const separator = appleMobile ? "&" : "?";
-    el("text-code").setAttribute("href", "sms:+12019739748" + separator + "body=" + encodeURIComponent(code));
+    const textLink = "sms:+12019739748" + separator + "body=" + encodeURIComponent(code);
+    el("text-code").setAttribute("href", textLink);
+    el("dialog-text-code").setAttribute("href", textLink);
+    el("dialog-code").textContent = code;
     panel.hidden = false;
     if (typeof proof === "string") prepEvent("unlocked", proof);
     status.textContent = "Your code is unlocked.";
-    panel.focus();
-    if (!hasCelebrated) celebrate();
+    const firstCelebration = !hasCelebrated;
     hasCelebrated = true;
     persist(true);
+    const popupOpened = firstCelebration && openRewardDialog();
+    if (!popupOpened) panel.focus();
+    if (firstCelebration) celebrate();
   } catch {
     status.textContent = "Couldn’t reveal your code. Please try again.";
   } finally {
     claiming = false;
     render();
   }
+}
+
+function openRewardDialog() {
+  if (typeof rewardDialog?.showModal !== "function") return false;
+  try {
+    popupFocusReturn = document.activeElement;
+    rewardDialog.showModal();
+    rewardDialog.append(el("confetti"));
+    el("reward-title").focus({ preventScroll: true });
+    return true;
+  } catch { return false; }
+}
+el("close-reward").addEventListener("click", () => rewardDialog.close());
+rewardDialog.addEventListener("close", () => {
+  const canvas = el("confetti");
+  canvas.hidden = true;
+  document.body.append(canvas);
+  const preferred = popupFocusReturn === claim ? el("text-code") : popupFocusReturn;
+  if (preferred && preferred !== document.body && !preferred.disabled) preferred.focus({ preventScroll: true });
+  else video.focus({ preventScroll: true });
+  popupFocusReturn = null;
 });
 
-el("copy").addEventListener("click", async () => {
-  if (!revealed) return;
-  try {
-    await navigator.clipboard.writeText(rewardCode.textContent);
-    el("copy").textContent = "Copied!";
-    el("copy-status").textContent = "Code copied to clipboard.";
-  } catch {
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(rewardCode);
-    selection.removeAllRanges();
-    selection.addRange(range);
-    el("copy-status").textContent = "Select and copy the displayed code.";
-  }
-});
+function setCopyAction(button, code, liveStatus) {
+  button.addEventListener("click", async () => {
+    if (!revealed) return;
+    try {
+      await navigator.clipboard.writeText(code.textContent);
+      button.textContent = "Copied!";
+      liveStatus.textContent = "Code copied to clipboard.";
+    } catch {
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(code);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      liveStatus.textContent = "Select and copy the displayed code.";
+    }
+  });
+}
+setCopyAction(el("copy"), rewardCode, el("copy-status"));
+setCopyAction(el("dialog-copy"), el("dialog-code"), el("dialog-copy-status"));
 
 function celebrate() {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;

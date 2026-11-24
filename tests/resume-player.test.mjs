@@ -29,6 +29,9 @@ class Element {
   async fire(key) { for (const fn of this.listeners.get(key) ?? []) await fn(); }
   setAttribute(key, value) { this.attributes[key] = key === "aria-valuenow" ? Number(value) : String(value); }
   focus() {}
+  append() {}
+  showModal() { this.open = true; this.opens = (this.opens || 0) + 1; }
+  close() { this.open = false; return this.fire("close"); }
 }
 function browser() {
   const initial = Date.now();
@@ -70,6 +73,7 @@ function browser() {
     if(personalized) win.location={hash:"#prep="+createPrepToken("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",Math.floor(wallClock/1000)+3600,env.PREP_SIGNING_SECRET)};
     let time = 0, seq = 0;
     doc.getElementById = el;
+    doc.body = new Element();
     Object.assign(player, {
       duration: NaN, videoWidth: 640, videoHeight: 360, currentTime: 0, paused: true, ended: false,
       seeking: false, playbackRate: 1, parentElement: new Element(),
@@ -118,8 +122,12 @@ test("mid-video refresh resumes with sound, preserving saved progress and origin
   assert.ok(Math.abs(second.player.currentTime - 2.05) < .001);
   await second.playTo(5);
   await second.end();
-  assert.equal(second.el("claim").disabled, false);
-  await second.el("claim").fire("click");
+  assert.equal(second.el("reward-dialog").open, true);
+  assert.equal(second.el("claim").disabled, true);
+  assert.equal(second.el("dialog-code").textContent, "dummy-test-code");
+  await second.el("close-reward").fire("click");
+  assert.equal(second.el("reward-dialog").open, false);
+  assert.equal(second.el("code-panel").hidden, false);
   assert.equal(second.el("reward-code").textContent, "dummy-test-code");
   assert.deepEqual(b.requests.map(r => r.action), ["start", "claim"]);
   await second.win.fire("pagehide");
@@ -128,8 +136,10 @@ test("mid-video refresh resumes with sound, preserving saved progress and origin
   assert.equal(third.el("start-text").textContent, "Play again");
   assert.equal(third.el("claim").disabled, false);
   assert.equal(third.el("code-panel").hidden, true);
+  assert.equal(third.el("reward-dialog").open, undefined);
   await third.el("claim").fire("click");
   assert.equal(third.el("reward-code").textContent, "dummy-test-code");
+  assert.equal(third.el("reward-dialog").open, undefined);
   assert.deepEqual(b.requests.map(r => r.action), ["start", "claim", "claim"]);
   assert.equal([...b.values.values()][0].includes("dummy-test-code"), false);
 });
@@ -153,7 +163,7 @@ test("rejected cached session gets a new server timer without asking the visitor
   assert.equal(fresh.el("claim").disabled, false);
   await fresh.el("claim").fire("click");
   assert.equal(fresh.el("reward-code").textContent, "dummy-test-code");
-  assert.deepEqual(b.requests.map(r => r.action), ["start", "claim", "start", "claim", "claim"]);
+  assert.deepEqual(b.requests.map(r => r.action), ["start", "claim", "claim", "start", "claim", "claim"]);
 });
 
 test("slow and failed metadata cannot wipe progress or trap the resume button", async () => {
@@ -192,6 +202,8 @@ test("missing section button locates the first real gap, then points to the next
   await p.playTo(5);
   await p.end();
   assert.equal(p.el("claim").disabled, true);
+  assert.equal(p.el("reward-dialog").open, undefined);
+  assert.equal(b.requests.filter(r => r.action==="claim").length, 0);
   assert.equal(p.el("missing-action").hidden, false);
   assert.match(p.el("missing-note").textContent, /0:01/);
   p.player.ended = false;
@@ -226,6 +238,8 @@ test("prefilled SMS is absent until claim, then uses the encoded earned code on 
     await p.el("claim").fire("click");
     assert.equal(p.el("code-panel").hidden, false);
     assert.equal(p.el("text-code").attributes.href, "sms:+12019739748" + delimiter + "body=CODE%2025%20%2B%20%23");
+    assert.equal(p.el("dialog-text-code").attributes.href, p.el("text-code").attributes.href);
+    assert.equal(p.el("reward-dialog").opens, 1);
   }
 });
 
@@ -237,11 +251,31 @@ test("prep link ignores autoplay preview; start and reveal signals don't block p
   await p.el("start").fire("click");
   assert.equal(b.requests.filter(x=>x.kind==="started").length,1);
   await p.playTo(5);
-  await p.end();
   assert.equal(b.requests.some(x=>x.kind==="unlocked"),false);
+  await p.end();
+  assert.equal(p.el("reward-dialog").open,true);
   await p.el("claim").fire("click");
   assert.match(p.el("reward-code").textContent,/^IG-[0-9A-F]{16}$/);
   assert.equal(p.el("code-panel").hidden,false);
   assert.equal(b.requests.filter(x=>x.kind==="unlocked").length,1);
   assert.equal(b.requests.find(x=>x.kind==="unlocked").proof.length,43);
+});
+
+test("automatic claim waits for server eligibility once without opening early or duplicating", async () => {
+  const b=browser();
+  b.env.WATCH_DURATION_SECONDS = "16";
+  const p=b.page();
+  await p.ready;
+  await p.el("start").fire("click");
+  await p.playTo(5);
+  await p.end();
+  assert.equal(p.el("reward-dialog").open, undefined);
+  assert.match(p.el("watch-status").textContent, /ready in about 3 seconds/);
+  assert.equal(p.el("dialog-text-code").attributes.href, undefined);
+  b.advance(3100);
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(p.el("reward-dialog").opens, 1);
+  await p.end();
+  assert.equal(p.el("reward-dialog").opens, 1);
+  assert.equal(b.requests.filter(r=>r.action==="claim").length, 2);
 });
