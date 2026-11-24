@@ -81,31 +81,3 @@ test("outbox failure keeps the notification pending; success acks its lease with
   const body=JSON.parse(opt.body);assert.equal(body.kind,"unlocked");assert.equal(body.prep_link,undefined);return {ok:true};}}),"sent");
  assert.equal(acked,1);
 });
-test("temporary QA is separately gated, fixed-shape and one synthetic booking per key",async()=>{
- const qaKey="fixture-independent-qa-key-32-or-more-";
- const receiver="https://services.leadconnectorhq.com/hooks/location-test/webhook-trigger/test";
- const e={...env,PREP_QA_SECRET:qaKey,PREP_OWNER_WEBHOOK_URL:receiver};
- const f=build(), samples=[], rows=[];
- const storage={...f.storage,book:async v=>{rows.push(v);return f.storage.book(v)},lease:async()=>null};
- const options={env:e,storage,now:()=>now,fetcher:async(url,opt)=>{
-  assert.equal(url,receiver);assert.equal(opt.redirect,"error");samples.push(JSON.parse(opt.body));return {ok:true};
- }};
- const h=createOwnerHandler(options);
- assert.equal((await call(h,{action:"qa-sample"})).status,401);
- assert.equal((await call(h,{action:"qa-sample"},env.PREP_OWNER_SECRET)).status,401);
- assert.equal((await call(h,{action:"pending"},qaKey)).status,401);
- assert.equal((await call(h,{action:"qa-sample",url:"https://example.org/"},qaKey)).status,400);
- assert.equal((await call(createOwnerHandler({...options,env:{...e,PREP_QA_SECRET:undefined}}),{action:"qa-sample"},qaKey)).status,401);
- assert.equal((await call(createOwnerHandler({...options,env:{...e,PREP_QA_SECRET:env.PREP_OWNER_SECRET}}),{action:"qa-sample"},env.PREP_OWNER_SECRET)).status,401);
- assert.equal((await call(h,{action:"qa-sample"},qaKey)).status,200);
- assert.equal(rows.length,0);
- assert.deepEqual(Object.keys(samples[0]).sort(),["appointment_at","contact_name","event_id","happened_at","kind","prep_link"]);
- assert.equal(samples[0].prep_link,"https://before-call.vercel.app/");
- assert.equal((await call(h,{action:"qa-booking",appointment_id:"real"},qaKey)).status,400);
- const first=await call(h,{action:"qa-booking"},qaKey);
- const second=await call(h,{action:"qa-booking"},qaKey);
- assert.equal(first.status,200);assert.equal(first.json.link,second.json.link);
- assert.equal(rows.length,2);assert.match(rows[0].appointment,/^qa_[0-9a-f]{32}$/);
- assert.equal(rows[0].appointment,rows[1].appointment);assert.equal((await storage.list()).length,1);
- assert.equal(samples.length,1);
-});
